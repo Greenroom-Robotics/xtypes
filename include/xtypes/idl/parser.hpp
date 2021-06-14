@@ -513,7 +513,7 @@ private:
                 str.replace(pos, froms, escaped);
                 pos = str.find(from, pos + escaped_size);
             }
-            
+
         }
     }
 
@@ -528,6 +528,7 @@ private:
         // Escape double quotes inside the idl_string
         std::string escaped_idl_string = idl_string;
         replace_all_string(escaped_idl_string, "\"", "\\\"");
+        replace_all_string(escaped_idl_string, "#include", "\n#include");
         std::string cmd = "echo \"" + escaped_idl_string + "\" | " + context_->preprocessor_exec + " " + args;
         context_->log(log::LogLevel::DEBUG, "PREPROCESS",
                 "Calling preprocessor '" + context_->preprocessor_exec + "' for an IDL string.");
