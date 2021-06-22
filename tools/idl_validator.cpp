@@ -19,10 +19,11 @@ int main(
         idl::Context context;
         context.log_level(idl::log::LogLevel::DEBUG);
         context.print_log(true);
+        context.include_paths.push_back("/opt/ros/foxy/share/");
         context.ignore_redefinition = true;
         context = idl::parse(idl_spec, context);
         std::cout << "Parse Success: " << std::boolalpha << context.success << std::endl;
-        for (auto [name, type] : context.get_all_types())
+        for (auto [name, type] : context.get_all_types(true))
         {
             if (type->kind() == TypeKind::STRUCTURE_TYPE)
             {
