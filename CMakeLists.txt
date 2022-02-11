@@ -37,8 +37,12 @@ target_include_directories(${PROJECT_NAME}
     )
 
 target_compile_features(${PROJECT_NAME}
-    INTERFACE
-        cxx_std_17
+    INTERFACE cxx_std_17
+    )
+
+# /std:c++latest is not set because the feature will target the latest already
+target_compile_options(${PROJECT_NAME}
+    INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/Zc:preprocessor /Zc:__cplusplus> 
     )
 
 #####################################################################################
@@ -65,7 +69,7 @@ macro(compile_tool)
         )
 
     target_compile_options(${TOOL_NAME}
-        INTERFACE
+        PUBLIC
             $<$<CXX_COMPILER_ID:GNU>:-Wall>
             $<$<CXX_COMPILER_ID:GNU>:-Wextra>
         )
@@ -112,7 +116,7 @@ macro(compile_example)
         )
 
     target_compile_options(${EXAMPLE_NAME}
-        INTERFACE
+        PUBLIC
             $<$<CXX_COMPILER_ID:GNU>:-Wall>
             $<$<CXX_COMPILER_ID:GNU>:-Wextra>
         )
@@ -146,9 +150,11 @@ macro(compile_test)
 
     compile_example(${TEST_NAME} SOURCE ${TEST_SOURCE})
 
+    target_include_directories(${TEST_NAME}
+        PRIVATE ${PROJECT_SOURCE_DIR}/cmake/common/gtest.cmake)
+
     target_link_libraries(${TEST_NAME}
-        PRIVATE
-            libgtest
+        PRIVATE GTest::gtest
         )
 
     set_target_properties(${TEST_NAME}
@@ -161,7 +167,9 @@ endmacro()
 
 if(XTYPES_BUILD_TESTS)
     include(CTest)
-    include(test/gtest.cmake)
+
+    find_package(GTest CONFIG REQUIRED)
+
     enable_testing()
 
     compile_test(${PROJECT_NAME}_test_unitary SOURCE

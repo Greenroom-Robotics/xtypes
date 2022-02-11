@@ -31,15 +31,17 @@
 #include <xtypes/idl/Module.hpp>
 #include <xtypes/idl/grammar.hpp>
 
-#include <map>
-#include <vector>
-#include <fstream>
-#include <memory>
+#include <array>
 #include <exception>
-#include <locale>
-#include <regex>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <locale>
+#include <map>
+#include <memory>
+#include <regex>
 #include <string_view>
+#include <vector>
 
 namespace peg {
 
@@ -148,7 +150,15 @@ struct Context
     bool ignore_redefinition = false;
     CharType char_translation = CHAR;
     WideCharType wchar_type = WCHAR_T;
+
+#ifdef _MSC_VER
+    // on MSVC the preprocessor is accessed from the compiler
+    // note the environment must be populated as developer console
+    std::string preprocessor_exec = "cl";
+#else
     std::string preprocessor_exec = "cpp";
+#endif
+
     std::vector<std::string> include_paths;
 
     // Results
@@ -413,11 +423,19 @@ public:
             const std::string& idl_file,
             const std::vector<std::string>& includes)
     {
+#ifdef _MSC_VER
+        std::string args = "/EP ";
+        for (const std::string inc_path : includes)
+        {
+            args += "/I " + inc_path + " ";
+        }
+#else
         std::string args = "-H ";
         for (const std::string inc_path : includes)
         {
             args += "-I " + inc_path + " ";
         }
+#endif
         std::string cmd = preprocessor_path + " " + args + idl_file;
         std::string output = exec(cmd);
         return output;
@@ -475,13 +493,37 @@ private:
             const std::string& cmd,
             bool filter_stderr = true)
     {
+        std::string result;
+        std::string command;
+#ifdef _MSC_VER
+
+        command = "powershell -C \"" + cmd;
+        if (filter_stderr)
+        {
+            command += " 2> $null ";
+        }
+
+        std::ostringstream filename;
+        filename << "xtypes_exec_" << std::rand();
+        auto filepath = std::filesystem::temp_directory_path() / filename.str();
+        command += "| Out-File -Encoding utf8 " + filepath.string() + "\"";
+
+        // Execute & retrieve the result
+        std::system(command.c_str());
+
+        std::ifstream result_file(filepath);
+        std::ostringstream result_text;
+        result_text << result_file.rdbuf();
+        result_file.close();
+        std::filesystem::remove(filepath);
+        result = result_text.str();
+#else
         std::array<char, 256> buffer;
-        std::string command = cmd;
+        command = cmd;
         if (filter_stderr)
         {
             command.append(" 2> /dev/null");
         }
-        std::string result;
         std::unique_ptr<FILE, decltype(& pclose)> pipe(popen(command.c_str(), "r"), pclose);
         if (!pipe)
         {
@@ -491,6 +533,7 @@ private:
         {
             result += buffer.data();
         }
+#endif
         return result;
     }
 
@@ -520,35 +563,51 @@ private:
     std::string preprocess_string(
             const std::string& idl_string) const
     {
-        std::string args = "-H ";
-        for (const std::string inc_path : context_->include_paths)
+#ifdef _MSC_VER
         {
-            args += "-I " + inc_path + " ";
+            // Escape double quotes inside the idl_string
+            std::string escaped_idl_string = idl_string;
+            replace_all_string(escaped_idl_string, "#include", "`n#include");
+
+            std::ostringstream filename;
+            filename << "xtypes_preprocess_" << std::rand();
+
+            // cl requires file input
+            auto filepath = std::filesystem::temp_directory_path() / filename.str();
+            std::ofstream idl_file(filepath);
+            idl_file << idl_string;
+            idl_file.close();
+
+            auto result = preprocess_file(filepath.string());
+            std::filesystem::remove(filepath);
+
+            return result;
         }
+#else
         // Escape double quotes inside the idl_string
         std::string escaped_idl_string = idl_string;
         replace_all_string(escaped_idl_string, "\"", "\\\"");
         replace_all_string(escaped_idl_string, "#include", "\n#include");
-        std::string cmd = "echo \"" + escaped_idl_string + "\" | " + context_->preprocessor_exec + " " + args;
-        context_->log(log::LogLevel::DEBUG, "PREPROCESS",
-                "Calling preprocessor '" + context_->preprocessor_exec + "' for an IDL string.");
-        return exec(cmd);
-    }
 
-    std::string preprocess_file(
-            const std::string& idl_file)
-    {
-        std::vector<std::string> includes;
         std::string args = "-H ";
         for (const std::string inc_path : context_->include_paths)
         {
             args += "-I " + inc_path + " ";
         }
-        std::string cmd = context_->preprocessor_exec + " " + args + idl_file;
+        std::string cmd = "echo \"" + escaped_idl_string + "\" | " + context_->preprocessor_exec + " " + args;
         context_->log(log::LogLevel::DEBUG, "PREPROCESS",
-                "Calling preprocessor with command: " + cmd);
-        std::string output = exec(cmd);
-        return output;
+                "Calling preprocessor '" + context_->preprocessor_exec + "' for an IDL string.");
+        return exec(cmd);
+#endif
+    }
+
+    std::string preprocess_file(
+            std::string idl_file) const
+    {
+        return preprocess(
+                context_->preprocessor_exec,
+                idl_file,
+                context_->include_paths);
     }
 
     std::shared_ptr<Module> build_on_ast(

@@ -18,12 +18,14 @@
 #ifndef EPROSIMA_XTYPES_ASSERT_HPP_
 #define EPROSIMA_XTYPES_ASSERT_HPP_
 
-#include <execinfo.h>
 #include <iostream>
 #include <sstream>
 
-#if !defined(XTYPES_EXCEPTIONS)
-#if !defined(NDEBUG)
+#ifndef XTYPES_EXCEPTIONS
+
+#if !defined(NDEBUG) && !defined(WIN32)
+
+#include <execinfo.h>
 
 #define xtypes_assert2_(cond, msg) xtypes_assert3_(cond, msg, false)
 
@@ -61,6 +63,7 @@
 #endif // NDEBUG
 
 #else // XTYPES_EXCEPTIONS
+
 #include <exception>
 #define xtypes_assert2_(cond, msg) xtypes_assert3_(cond, msg, false)
 
@@ -81,6 +84,5 @@
 
 #define GET_MACRO(_1, _2, _3, NAME, ...) NAME
 #define xtypes_assert(...) GET_MACRO(__VA_ARGS__, xtypes_assert3_, xtypes_assert2_)(__VA_ARGS__)
-
 
 #endif // EPROSIMA_XTYPES_ASSERT_HPP_
