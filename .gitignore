@@ -1,2 +1,5 @@
 build
 docs/html
+log
+node_modules
+.releaserc
