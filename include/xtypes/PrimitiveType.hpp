@@ -72,6 +72,12 @@ DDS_CORE_XTYPES_PRIMITIVE_ALIASES(long, int32_t)
 DDS_CORE_XTYPES_PRIMITIVE_ALIASES(unsigned long, uint32_t)
 #endif
 
+    template<typename CharT>
+    constexpr bool is_basic_string = false;
+
+    template<typename CharT, typename Traits, typename Alloc>
+    constexpr bool is_basic_string<std::__cxx11::basic_string<CharT, Traits, Alloc>> = true;
+
 /// \brief DynamicType representing a primitive type.
 /// Primitive types can be the following: bool char wchar_t uint8_t int16_t
 /// uint16_t int32_t uint32_t int64_t uint64_t float double long double.
@@ -117,7 +123,10 @@ protected:
     virtual void construct_instance(
             uint8_t* instance) const override
     {
-        *reinterpret_cast<T*>(instance) = T(0);
+        if constexpr (is_basic_string<T>) {
+        } else {
+            *reinterpret_cast<T*>(instance) = T(0);
+        }
     }
 
     virtual void destroy_instance(
